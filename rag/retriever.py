@@ -16,7 +16,7 @@ from rag.embeddings import EmbeddingManager
 from rag.vectorstore import VectorStore
 
 
-def build_bm25_index(vector_store: VectorStore) -> tuple[BM25Okapi, list]:
+def build_bm25_index(vector_store: VectorStore) -> tuple[BM25Okapi | None, list]:
     """
     Pull every document from *vector_store* and build a BM25 index.
 
@@ -30,6 +30,10 @@ def build_bm25_index(vector_store: VectorStore) -> tuple[BM25Okapi, list]:
     """
     _tokenize = lambda t: re.findall(r"\w+", t.lower())
     all_docs = vector_store.collection.get()
+
+    if not all_docs.get("documents"):
+        print("⚠️ BM25 index skipped — vector store is empty")
+        return None, []
 
     bm25_index = BM25Okapi([_tokenize(t) for t in all_docs["documents"]])
     bm25_store = [

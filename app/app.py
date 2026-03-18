@@ -3,7 +3,7 @@
 Startup:  loads embeddings, vector store, BM25 index, reranker, and LLM once.
 Endpoints:
     POST /api/query        	— ask a question about the 10-K filing
-    GET  /api/eval-results 	— return saved evaluation CSV as JSON
+    POST /api/upload       	— upload a PDF and trigger ingestion
     GET  /health           	— liveness check
     GET  /                 	— serves the static frontend
 """
@@ -15,7 +15,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import pandas as pd
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,9 +26,6 @@ from pydantic import BaseModel
 load_dotenv()
 
 from config.settings import (
-    EVAL_RESULTS_PATH,
-    JUDGE_LLM_MODEL,
-    JUDGE_TEMPERATURE,
     LLM_MAX_TOKENS,
     LLM_TEMPERATURE,
     RAG_LLM_MODEL,
@@ -250,33 +246,3 @@ async def upload_document(
         message="Upload accepted. Ingestion is running in the background.",
         filename=file.filename,
     )
-
-
-@app.get("/api/eval-results")
-async def eval_results():
-    """
-    Return the saved evaluation CSV as a list of JSON objects.
-    Returns an empty list if no results file exists yet.
-    """
-    if not EVAL_RESULTS_PATH.exists():
-        return {"results": [], "summary": {}}
-
-    df = pd.read_csv(EVAL_RESULTS_PATH)
-
-    # Replace NaN with None so JSON serialisation works
-    df = df.where(pd.notna(df), None)
-
-    score_cols = [
-        "relevance_score", "correctness_score",
-        "completeness_score", "faithfulness_score", "mean_score",
-    ]
-    existing_score_cols = [c for c in score_cols if c in df.columns]
-
-    summary = {}
-    if existing_score_cols:
-        summary = df[existing_score_cols].mean().round(2).to_dict()
-
-    return {
-        "results": df.to_dict(orient="records"),
-        "summary": summary,
-    }
