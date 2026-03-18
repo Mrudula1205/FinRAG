@@ -1,6 +1,5 @@
 llama-cloud>=1.6.0
 chromadb
-pandas
 numpy
 sentence-transformers
 python-dotenv
@@ -11,6 +10,6 @@ langchain_experimental
 langchain_huggingface
 rank_bm25
 
-# API & frontend server
+# API server
 fastapi
 uvicorn[standard]

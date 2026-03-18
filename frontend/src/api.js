@@ -16,7 +16,12 @@ export async function queryRag({ question, topK }) {
   return res.data; // { answer, top_retrieval_score, sources[] }
 }
 
-export async function fetchEvalResults() {
-  const res = await axios.get(`${API_BASE}/api/eval-results`);
-  return res.data; // { results, summary }
+export async function uploadPdf(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await axios.post(`${API_BASE}/api/upload`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data; // { message, filename }
 }

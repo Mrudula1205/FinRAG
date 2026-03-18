@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,8 +33,10 @@ from config.settings import (
     LLM_MAX_TOKENS,
     LLM_TEMPERATURE,
     RAG_LLM_MODEL,
+    RAW_DATA_DIR,
 )
 from rag.embeddings import EmbeddingManager
+from rag.ingestion import load_10k_documents
 from rag.pipeline import rag_enhanced_query
 from rag.retriever import RAGRetriever, build_bm25_index, load_reranker
 from rag.vectorstore import VectorStore
@@ -43,6 +45,7 @@ from rag.vectorstore import VectorStore
 _state: Dict[str, Any] = {}
 
 STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── Lifespan: initialise heavy components once ────────────────────────────────
@@ -80,6 +83,8 @@ async def lifespan(app: FastAPI):
 
     _state["retriever"] = retriever
     _state["llm"] = llm
+    _state["embedding_manager"] = embedding_manager
+    _state["vector_store"] = vector_store
     print("✅ Pipeline ready — server is accepting requests.")
 
     yield  # ── server runs here ──
@@ -133,6 +138,11 @@ class QueryResponse(BaseModel):
     sources: List[SourceItem]
 
 
+class UploadResponse(BaseModel):
+    message: str
+    filename: str
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/", include_in_schema=False)
@@ -150,6 +160,31 @@ async def health():
     retriever: RAGRetriever = _state.get("retriever")
     doc_count = retriever.vector_store.collection.count() if retriever else 0
     return {"status": "ok", "vector_store_docs": doc_count}
+
+
+async def _ingest_pdf(path: Path) -> int:
+    """Parse a 10-K PDF and upsert its chunks into the shared vector store.
+
+    This reuses the same ingestion pipeline used by the CLI, but operates on
+    a specific *path* uploaded by the user instead of a fixed local file.
+    """
+
+    docs = await load_10k_documents(pdf_path=path)
+
+    embedding_manager: EmbeddingManager = _state["embedding_manager"]
+    vector_store: VectorStore = _state["vector_store"]
+
+    texts = [d.page_content for d in docs]
+    embeddings = embedding_manager.generate_embeddings(texts)
+    vector_store.add_documents(docs, embeddings)
+
+    # Rebuild BM25 index to include the new documents
+    bm25_index, bm25_store = build_bm25_index(vector_store)
+    retriever: RAGRetriever = _state["retriever"]
+    retriever.bm25_index = bm25_index
+    retriever.bm25_store = bm25_store
+
+    return len(docs)
 
 
 @app.post("/api/query", response_model=QueryResponse)
@@ -184,6 +219,36 @@ async def query(request: QueryRequest):
         answer=result["answer"],
         top_retrieval_score=result["top_retrieval_score"],
         sources=[SourceItem(**s) for s in result["sources"]],
+    )
+
+
+@app.post("/api/upload", response_model=UploadResponse)
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+):
+    """Upload a 10-K PDF and trigger background ingestion.
+
+    The file is stored under ``data/raw`` and parsed with Llama Cloud. Its
+    chunks are embedded and upserted into the shared ChromaDB collection.
+    """
+
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    dest = RAW_DATA_DIR / file.filename
+
+    contents = await file.read()
+    with dest.open("wb") as f:
+        f.write(contents)
+
+    # Ingest asynchronously so the request returns quickly.
+    background_tasks.add_task(_ingest_pdf, dest)
+
+    return UploadResponse(
+        message="Upload accepted. Ingestion is running in the background.",
+        filename=file.filename,
     )
 
 

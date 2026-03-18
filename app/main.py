@@ -6,8 +6,6 @@ Usage (build vector store from scratch):
 Usage (ask a single question):
     python -m app.main --query "What are the main risk factors in this 10-K?"
 
-Usage (run evaluation):
-    python -m app.main --evaluate
 """
 
 from __future__ import annotations
@@ -22,13 +20,10 @@ load_dotenv()
 
 from config.settings import (
     DEFAULT_TOP_K,
-    JUDGE_LLM_MODEL,
-    JUDGE_TEMPERATURE,
     LLM_MAX_TOKENS,
     LLM_TEMPERATURE,
     RAG_LLM_MODEL,
 )
-from evaluation.evaluator import EVAL_DATASET, LLMJudgeEvaluator, print_scorecard, run_evaluation
 from rag.embeddings import EmbeddingManager
 from rag.ingestion import load_10k_documents
 from rag.pipeline import rag_enhanced_query
@@ -100,10 +95,6 @@ def main() -> None:
         help="Ask a single question about the 10-K filing."
     )
     parser.add_argument(
-        "--evaluate", action="store_true",
-        help="Run the evaluation pipeline on the built-in test dataset."
-    )
-    parser.add_argument(
         "--top-k", type=int, default=DEFAULT_TOP_K,
         help=f"Number of documents to retrieve (default: {DEFAULT_TOP_K})."
     )
@@ -124,20 +115,7 @@ def main() -> None:
         for s in result["sources"]:
             print(f"  - Article {s['article']}, Clause {s['clause']} | score={s['score']} | {s['preview'][:80]}...")
 
-    if args.evaluate:
-        print("\n📊 Running evaluation pipeline …\n")
-        groq_api_key = os.getenv("GROQ_API_KEY")
-        judge_llm = ChatGroq(
-            api_key=groq_api_key,
-            model_name=JUDGE_LLM_MODEL,
-            temperature=JUDGE_TEMPERATURE,
-            max_tokens=LLM_MAX_TOKENS,
-        )
-        judge = LLMJudgeEvaluator(judge_llm=judge_llm)
-        df = run_evaluation(EVAL_DATASET, retriever, llm, judge, top_k=args.top_k)
-        print_scorecard(df)
-
-    if not args.query and not args.evaluate and not args.ingest:
+    if not args.query and not args.ingest:
         parser.print_help()
 
 

@@ -1,10 +1,9 @@
 // src/App.jsx
 import React, { useEffect, useState } from "react";
-import { health, queryRag, fetchEvalResults } from "./api";
+import { health, queryRag, uploadPdf } from "./api";
 import "./App.css";
 
 function App() {
-  const [activeTab, setActiveTab] = useState("chat");
   const [healthStatus, setHealthStatus] = useState("Connecting…");
   const [healthDocs, setHealthDocs] = useState(null);
 
@@ -14,9 +13,8 @@ function App() {
   const [topK, setTopK] = useState(5);
   const [topScore, setTopScore] = useState(null);
 
-  const [evalLoading, setEvalLoading] = useState(false);
-  const [evalSummary, setEvalSummary] = useState({});
-  const [evalRows, setEvalRows] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState("");
 
   // Health check once
   useEffect(() => {
@@ -31,22 +29,6 @@ function App() {
     })();
   }, []);
 
-  // Load eval when switching to eval tab
-  useEffect(() => {
-    if (activeTab !== "eval") return;
-    (async () => {
-      setEvalLoading(true);
-      try {
-        const data = await fetchEvalResults();
-        setEvalSummary(data.summary || {});
-        setEvalRows(data.results || []);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setEvalLoading(false);
-      }
-    })();
-  }, [activeTab]);
 
   const addMessage = (role, text, extra = {}) => {
     setMessages((prev) => [...prev, { role, text, ...extra }]);
@@ -97,23 +79,47 @@ function App() {
         </div>
       </header>
 
-      <nav className="tabs">
-        <button
-          className={activeTab === "chat" ? "tab active" : "tab"}
-          onClick={() => setActiveTab("chat")}
-        >
-          💬 Ask the 10-K
-        </button>
-        <button
-          className={activeTab === "eval" ? "tab active" : "tab"}
-          onClick={() => setActiveTab("eval")}
-        >
-          📊 Eval Dashboard
-        </button>
-      </nav>
+      <main className="chat">
+            <section className="upload-panel">
+              <h2>Upload a 10-K PDF</h2>
+              <p className="upload-help">
+                Choose a filing PDF to index. The server will parse and add it to
+                the vector store; this may take a minute for large documents.
+              </p>
+              <div className="upload-controls">
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    setSelectedFile(f);
+                  }}
+                />
+                <button
+                  onClick={async () => {
+                    if (!selectedFile) {
+                      setUploadStatus("Please select a PDF first.");
+                      return;
+                    }
+                    try {
+                      setUploadStatus("Uploading and starting ingestion…");
+                      const res = await uploadPdf(selectedFile);
+                      setUploadStatus(res.message || "Upload started.");
+                    } catch (e) {
+                      setUploadStatus(
+                        `Upload failed: ${e.response?.data?.detail || e.message}`
+                      );
+                    }
+                  }}
+                >
+                  Upload & Index
+                </button>
+              </div>
+              {uploadStatus && (
+                <p className="upload-status">{uploadStatus}</p>
+              )}
+            </section>
 
-      {activeTab === "chat" && (
-        <main className="chat">
           <div className="chat-messages">
             {messages.length === 0 && (
               <div className="welcome-card">
@@ -177,68 +183,7 @@ function App() {
               )}
             </div>
           </div>
-        </main>
-      )}
-
-      {activeTab === "eval" && (
-        <main className="eval">
-          <h2>Evaluation Results</h2>
-          <p>
-            LLM-as-Judge scoring across 4 dimensions (1–5 scale).
-            Judge: <code>openai/gpt-oss-120b</code>
-          </p>
-
-          {evalLoading ? (
-            <p>Loading…</p>
-          ) : (
-            <>
-              <div className="summary-cards">
-                {Object.entries(evalSummary).map(([key, val]) => (
-                  <div key={key} className="summary-card">
-                    <div className="card-value">{val.toFixed(2)}</div>
-                    <div className="card-label">{key}</div>
-                  </div>
-                ))}
-              </div>
-
-              <table className="eval-table">
-                <thead>
-                  <tr>
-                    <th>Query</th>
-                    <th>Difficulty</th>
-                    <th>Relevance</th>
-                    <th>Correctness</th>
-                    <th>Completeness</th>
-                    <th>Faithfulness</th>
-                    <th>Mean</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {evalRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={7}>
-                        No results yet — run the evaluation first.
-                      </td>
-                    </tr>
-                  ) : (
-                    evalRows.map((row, i) => (
-                      <tr key={i}>
-                        <td>{row.query}</td>
-                        <td>{row.difficulty}</td>
-                        <ScoreCell v={row.relevance_score} />
-                        <ScoreCell v={row.correctness_score} />
-                        <ScoreCell v={row.completeness_score} />
-                        <ScoreCell v={row.faithfulness_score} />
-                        <ScoreCell v={row.mean_score} />
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </>
-          )}
-        </main>
-      )}
+      </main>
     </div>
   );
 }
@@ -268,11 +213,6 @@ function MessageBubble({ message }) {
       )}
     </div>
   );
-}
-
-function ScoreCell({ v }) {
-  if (v == null) return <td>—</td>;
-  return <td>{Number(v).toFixed(1)}</td>;
 }
 
 export default App;
