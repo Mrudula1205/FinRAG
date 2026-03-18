@@ -31,4 +31,4 @@ COPY data/      ./data/
 EXPOSE 7860
 
 # Pass secrets via Space settings → Variables and secrets → GROQ_API_KEY
-CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "app.app:app", "--host", "0.0.0.0", "--port", "7860"]
