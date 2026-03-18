@@ -1,12 +1,8 @@
-llama-parse
 llama-cloud>=1.6.0
-llama-index-core <0.13.0,>=0.12.0
-llama-index-vector-stores-chroma
 chromadb
 pandas
 numpy
 sentence-transformers
-llama-index-embeddings-huggingface
 python-dotenv
 langchain_groq
 langchain_text_splitters
@@ -14,7 +10,6 @@ langchain_core
 langchain_experimental
 langchain_huggingface
 rank_bm25
-sentence_transformers
 
 # API & frontend server
 fastapi
