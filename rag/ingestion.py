@@ -1,8 +1,7 @@
 """10-K filing ingestion using LlamaCloud + Markdown-based chunking.
 
-This module replaces the previous GDPR-focused ingestion. It is now
-responsible only for turning a 10-K PDF into LangChain Documents that can
-be embedded and indexed in the RAG pipeline.
+This module turns a 10-K PDF into LangChain Documents that can be embedded
+and indexed in the RAG pipeline.
 """
 
 from __future__ import annotations

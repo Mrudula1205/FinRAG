@@ -41,7 +41,7 @@ class VectorStore:
         self.collection = self.client.get_or_create_collection(
             name=self.collection_name,
             metadata={
-                "description": "GDPR Documents Collection",
+                "description": "10-K Financial Documents Collection",
                 "hnsw:space": "cosine",
             },
         )

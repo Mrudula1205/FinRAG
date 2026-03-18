@@ -1,5 +1,5 @@
 """
-Central configuration for the GDPR-RAG project.
+Central configuration for the FinRAG project.
 All path and model constants live here so other modules never hardcode them.
 """
 

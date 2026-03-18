@@ -28,7 +28,6 @@ Core stack:
 
 - `app/` – CLI entrypoint (`app.main`) and FastAPI server (`app.api`).
 - `rag/` – ingestion, embeddings, vector store, hybrid retriever, and RAG pipeline.
-- `evaluation/` – LLM‑as‑judge evaluation utilities and default question set.
 - `frontend/` – React SPA that calls the FastAPI backend.
 - `data/raw/` – input 10‑K PDF (not tracked in git).
 - `data/vectorstore/` – ChromaDB persistent index (not tracked in git).
@@ -80,16 +79,6 @@ Run a one‑off CLI query:
 python -m app.main --query "What are the main risk factors mentioned in this 10‑K?"
 ```
 
-Optionally run the evaluation suite:
-
-```bash
-python -m app.main --evaluate
-```
-
-This writes a CSV of scores to `data/eval_results.csv`.
-
----
-
 ## Running the API server
 
 After ingestion has completed at least once:
@@ -101,7 +90,6 @@ uvicorn app.api:app --reload --port 8000
 Key endpoints:
 - `GET /health` – liveness + current vector‑store document count.
 - `POST /api/query` – main RAG endpoint for questions about the 10‑K.
-- `GET /api/eval-results` – returns saved evaluation results as JSON.
 
 The React frontend is served from `app/static` in production builds (see
 Docker section) but can be run separately during development.
