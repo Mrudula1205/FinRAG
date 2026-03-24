@@ -139,6 +139,11 @@ class UploadResponse(BaseModel):
     filename: str
 
 
+class ResetResponse(BaseModel):
+    message: str
+    vector_store_docs: int
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/", include_in_schema=False)
@@ -245,4 +250,25 @@ async def upload_document(
     return UploadResponse(
         message="Upload accepted. Ingestion is running in the background.",
         filename=file.filename,
+    )
+
+
+@app.post("/api/reset-index", response_model=ResetResponse)
+async def reset_index():
+    """Reset the vector index so each session can start fresh in dev mode."""
+    retriever: RAGRetriever = _state.get("retriever")
+    vector_store: VectorStore = _state.get("vector_store")
+
+    if not retriever or not vector_store:
+        raise HTTPException(status_code=503, detail="Pipeline not initialised.")
+
+    vector_store.reset_collection()
+
+    bm25_index, bm25_store = build_bm25_index(vector_store)
+    retriever.bm25_index = bm25_index
+    retriever.bm25_store = bm25_store
+
+    return ResetResponse(
+        message="Vector index cleared. Upload documents to build a fresh session.",
+        vector_store_docs=vector_store.collection.count(),
     )

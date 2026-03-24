@@ -93,6 +93,22 @@ class VectorStore:
 
         print(f"✅ Upserted {len(ids)} documents. Collection total: {self.collection.count()}")
 
+    def reset_collection(self) -> None:
+        """Delete and recreate the current collection.
+
+        Useful for development flows where each UI refresh should start from a
+        clean index containing only newly uploaded documents.
+        """
+        self.client.delete_collection(name=self.collection_name)
+        self.collection = self.client.get_or_create_collection(
+            name=self.collection_name,
+            metadata={
+                "description": "10-K Financial Documents Collection",
+                "hnsw:space": "cosine",
+            },
+        )
+        print(f"♻️ Collection '{self.collection_name}' reset. Current doc count: {self.collection.count()}")
+
     def query(
         self,
         query_embedding: np.ndarray,

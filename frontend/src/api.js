@@ -25,3 +25,8 @@ export async function uploadPdf(file) {
   });
   return res.data; // { message, filename }
 }
+
+export async function resetIndex() {
+  const res = await axios.post(`${API_BASE}/api/reset-index`);
+  return res.data; // { message, vector_store_docs }
+}

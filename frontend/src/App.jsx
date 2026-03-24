@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { health, queryRag, uploadPdf } from "./api";
+import { health, queryRag, resetIndex, uploadPdf } from "./api";
 import "./App.css";
 
 function App() {
@@ -27,7 +27,16 @@ function App() {
   };
 
   useEffect(() => {
-    refreshHealth();
+    (async () => {
+      // Dev mode behavior: each page refresh starts from a clean vector index.
+      try {
+        const reset = await resetIndex();
+        setUploadStatus(reset.message || "Vector index reset.");
+      } catch (e) {
+        console.error("Index reset failed", e);
+      }
+      await refreshHealth();
+    })();
   }, []);
 
   const addMessage = (role, text, extra = {}) => {
