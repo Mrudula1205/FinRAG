@@ -1,102 +1,142 @@
----
-title: FinRAG – 10‑K RAG
-emoji: 📊
-colorFrom: blue
-colorTo: purple
-sdk: docker
-app_port: 7860
-pinned: false
----
+# FinRAG
 
-# FinRAG – 10‑K Retrieval‑Augmented Generation
+Production-style retrieval-augmented generation system for SEC 10-K analysis.
 
-FinRAG is an end‑to‑end Retrieval‑Augmented Generation (RAG) system that lets you
-ask natural‑language questions about a single SEC 10‑K filing. It parses the PDF
-with Llama Cloud, builds a persistent ChromaDB vector store, and serves a FastAPI
-backend plus a small React frontend for interactive analysis.
+FinRAG ingests annual filings, parses them into structured markdown, builds a
+hybrid retrieval index, and serves grounded answers through a FastAPI backend
+and React frontend. The project is designed to answer filing-specific
+questions with traceable source passages rather than free-form financial
+commentary.
 
-Core stack:
-- Python RAG pipeline (LangChain‑style abstractions, custom retriever)
-- ChromaDB persistent vector store
-- BAAI `bge-large-en-v1.5` embeddings + cross‑encoder reranker
-- Groq LLMs (`llama-3.3-70b-versatile` for answers, `openai/gpt-oss-120b` as judge)
-- FastAPI backend + Vite/React frontend
+## What This System Does
 
----
+- Ingests 10-K PDF filings with LlamaCloud parsing.
+- Normalizes parsed markdown into section-aware chunks with metadata.
+- Stores embeddings in a persistent Chroma collection.
+- Combines dense retrieval, BM25 sparse retrieval, RRF fusion, and cross-encoder reranking.
+- Serves answers with retrieved source passages through an API and web UI.
 
-## Project structure
+## Architecture
 
-- `app/` – CLI entrypoint (`app.main`) and FastAPI server (`app.api`).
-- `rag/` – ingestion, embeddings, vector store, hybrid retriever, and RAG pipeline.
-- `frontend/` – React SPA that calls the FastAPI backend.
-- `data/raw/` – input 10‑K PDF (not tracked in git).
-- `data/vectorstore/` – ChromaDB persistent index (not tracked in git).
+```text
+PDF upload / local filing
+        |
+        v
+LlamaCloud parse -> page markdown -> normalized sections -> rechunked chunks
+        |
+        v
+Embeddings (BAAI/bge-large-en-v1.5)
+        |
+        v
+Chroma vector store + BM25 index
+        |
+        v
+RRF fusion -> cross-encoder reranker
+        |
+        v
+LLM answer generation with source passages
+        |
+        v
+FastAPI API + React frontend
+```
 
----
+## Retrieval Design
 
-## Prerequisites
+FinRAG uses a multi-stage retrieval stack rather than a single vector search.
 
-- Python 3.10+ (recommended to use a virtualenv).
-- A Groq API key with access to the models used here.
-- A Llama Cloud API key for 10‑K parsing.
-- Node.js 18+ if you want to run the React frontend in dev mode.
+1. Parse the 10-K into markdown with page-level structure.
+2. Split by filing headers, then rechunk long sections while preserving tables.
+3. Embed chunks with `BAAI/bge-large-en-v1.5`.
+4. Retrieve candidates from:
+   - Chroma dense similarity search
+   - BM25 sparse keyword search
+5. Merge candidate lists with Reciprocal Rank Fusion.
+6. Rerank the merged shortlist with `BAAI/bge-reranker-base`.
+7. Generate the final answer from retrieved evidence only.
 
-Required environment variables (e.g. in `.env`):
+This design improves recall on both semantic and keyword-heavy questions,
+which matters for filings containing exact legal phrasing, section titles,
+and numeric disclosures.
+
+## Tech Stack
+
+- Backend: FastAPI, Python
+- Retrieval: ChromaDB, BM25, RRF fusion, cross-encoder reranking
+- Embeddings: `BAAI/bge-large-en-v1.5`
+- Parsing: LlamaCloud
+- LLM serving: Groq via `langchain_groq`
+- Frontend: React + Vite
+- Packaging: Docker
+
+## Repository Layout
+
+```text
+FinRAG/
+├─ app/
+│  ├─ app.py            # FastAPI application
+│  └─ main.py           # CLI entrypoint for ingestion and query
+├─ config/
+│  └─ settings.py       # Central configuration
+├─ rag/
+│  ├─ ingestion.py      # Parse, normalize, rechunk, persist artifacts
+│  ├─ embeddings.py     # Embedding model wrapper
+│  ├─ retriever.py      # Dense + BM25 + RRF + reranker
+│  ├─ pipeline.py       # Prompting and structured query output
+│  └─ vectorstore.py    # Chroma collection management
+├─ frontend/
+│  └─ src/              # React client
+├─ data/
+│  ├─ raw/              # Uploaded / local 10-K PDFs
+│  ├─ processed/        # Saved parse artifacts and chunk manifests
+│  └─ vectorstore/      # Persistent Chroma data
+├─ Dockerfile
+└─ requirements.txt
+```
+
+## Local Development
+
+### Prerequisites
+
+- Python 3.10+
+- Node.js 18+
+- Groq API key
+- LlamaCloud API key
+
+Create a `.env` file:
 
 ```bash
 GROQ_API_KEY=...
 LLAMA_CLOUD_API_KEY=...
 ```
 
----
-
-## Setup (backend)
+### Backend Setup
 
 ```bash
 cd FinRAG
-python -m venv venv
-.\n+venv\Scripts\activate  # PowerShell / cmd on Windows
+python -m venv .venv
+.venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Place your 10‑K PDF under `data/raw/` and ensure the filename matches the
-default in `rag/ingestion.py` (currently `tsla-20251231-gen.pdf`), or pass a
-custom path when you adapt the ingestion step.
-
-Build the vector store once:
+### Ingest a Filing
 
 ```bash
 python -m app.main --ingest
 ```
 
-You should see logs showing Llama Cloud parsing the PDF and ChromaDB being
-populated with chunks.
+This will:
+- parse the most recent PDF in `data/raw/` if no explicit path is wired in,
+- create processed parse artifacts under `data/processed/<doc_id>/`,
+- build or extend the Chroma collection.
 
-Run a one‑off CLI query:
-
-```bash
-python -m app.main --query "What are the main risk factors mentioned in this 10‑K?"
-```
-
-## Running the API server
-
-After ingestion has completed at least once:
+### Run the API
 
 ```bash
-uvicorn app.api:app --reload --port 8000
+uvicorn app.app:app --reload --port 8000
 ```
 
-Key endpoints:
-- `GET /health` – liveness + current vector‑store document count.
-- `POST /api/query` – main RAG endpoint for questions about the 10‑K.
-
-The React frontend is served from `app/static` in production builds (see
-Docker section) but can be run separately during development.
-
----
-
-## Frontend (optional dev workflow)
+### Run the Frontend
 
 ```bash
 cd frontend
@@ -104,35 +144,146 @@ npm install
 npm run dev
 ```
 
-By default this runs on `http://localhost:5173` and calls the FastAPI backend
-on `http://localhost:8000` (CORS is already configured).
+Frontend runs on `http://localhost:5173` and calls the backend on
+`http://localhost:8000`.
 
----
+## API Surface
 
-## Docker
+- `GET /health`
+  - liveness check plus current vector-store document count
+- `POST /api/upload`
+  - upload a PDF and trigger ingestion
+- `POST /api/query`
+  - submit a natural-language question against the indexed filings
+- `POST /api/reset-index`
+  - clear the vector index for a fresh dev session
 
-The included `Dockerfile` builds a container image with the FastAPI backend and
-static frontend bundled together. A typical build/run sequence:
+## Example Query
+
+```bash
+python -m app.main --query "What are the main risk factors disclosed in this filing?"
+```
+
+Expected response shape:
+
+```json
+{
+  "answer": "...",
+  "top_retrieval_score": 0.61,
+  "sources": [
+    {
+      "source": "Tesla 2025 10-K",
+      "section": "Item 1A. Risk Factors",
+      "score": 0.61,
+      "preview": "..."
+    }
+  ]
+}
+```
+
+## Engineering Notes
+
+### Parsing and Chunking
+
+The ingestion pipeline is intentionally two-stage:
+
+- structural split by markdown headers to preserve filing hierarchy
+- bounded rechunking for retrieval efficiency
+
+Tables are preserved as standalone chunks where possible, and chunk metadata
+includes section path, page span, chunk type, and quality flags.
+
+### Why Hybrid Retrieval
+
+10-K queries often mix semantic intent with exact language:
+- "What changed in liquidity risk?"
+- "Where does the filing mention material weakness?"
+- "What is the company name?"
+
+Dense retrieval handles paraphrase well. BM25 helps when wording is exact.
+RRF fusion combines both, and the reranker improves final precision.
+
+## Deployment
+
+Build and run with Docker:
 
 ```bash
 docker build -t finrag .
-docker run -p 7860:7860 --env-file .env \
-	-v ${PWD}/data:/app/data finrag
+docker run -p 7860:7860 --env-file .env -v ${PWD}/data:/app/data finrag
 ```
 
-Persisting `./data` as a volume ensures the ChromaDB index survives container
-restarts. Run the ingestion command once inside the container (or as a
-one‑off job that shares the same volume) before serving live traffic.
+Persisting `data/` as a volume preserves both the processed artifacts and the
+vector store between container restarts.
 
----
+## Benchmarks
 
-## Notes and limitations
+Do not publish made-up metrics. Replace this section only after you have
+measured the system.
 
-- The system is designed for **one 10‑K at a time**; adapting it to multiple
-	filings would require extending the metadata schema and ingestion logic.
-- The quality of answers depends heavily on the Llama Cloud parse and the
-	retrieval configuration (chunk size, BM25 fusion, reranker thresholds).
-- The repo intentionally ignores `data/raw/`, `data/processed/`, and
-	`data/vectorstore/`; only code and configuration are committed to git.
+Recommended metrics to track:
 
-Contributions, issue reports, and suggestions are welcome.
+- p50 and p95 query latency
+- ingestion latency per filing
+- average prompt and completion tokens
+- estimated cost per request
+- retrieval hit rate at K
+- answer accuracy on a labeled evaluation set
+- failure rate for empty or low-confidence retrieval
+
+Suggested reporting format:
+
+```text
+Query latency (p95): <fill after benchmark>
+Cost per request: <fill after benchmark>
+Retrieval hit@5: <fill after benchmark>
+Answer accuracy: <fill after benchmark>
+Test corpus: <number of filings / sectors / years>
+```
+
+## Operational Gaps
+
+Current repository strengths:
+
+- multi-stage retrieval stack
+- persistent vector store
+- upload and query API
+- containerized app structure
+- parse artifact persistence for debugging
+
+Current gaps before calling this production-ready:
+
+- no committed benchmark suite or evaluation harness
+- limited automated test coverage
+- no CI pipeline yet
+- no auth, rate limiting, or audit logging
+- weak query-time filtering for multi-filing collections
+
+## Postmortem-Style Lessons
+
+- Generic questions over a shared multi-filing index can retrieve evidence from
+  multiple companies unless metadata filters are enforced.
+- BM25 and dense similarity scores should not be shown as if they are the same
+  metric.
+- Raw uploaded filenames should be normalized into clean source labels to keep
+  citations readable.
+
+## Resume-Friendly Project Framing
+
+Use quantified bullets only after measurement. A stronger framing looks like:
+
+```text
+Built a hybrid RAG system for SEC 10-K analysis using FastAPI, Chroma, BM25,
+RRF fusion, and cross-encoder reranking. Implemented section-aware chunking,
+source-grounded answers, Dockerized deployment, and persistent vector indexing
+for multi-filing retrieval workflows.
+```
+
+Once benchmarks exist, append real numbers:
+
+```text
+Built a hybrid RAG system for SEC 10-K analysis.
+- p95 latency: <measured>
+- cost/request: <measured>
+- retrieval hit@5: <measured>
+- stack: FastAPI, Chroma, React, Docker, Groq, LlamaCloud
+```
