@@ -13,3 +13,4 @@ rank_bm25
 # API server
 fastapi
 uvicorn[standard]
+python-multipart
