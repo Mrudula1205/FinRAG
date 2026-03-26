@@ -25,7 +25,7 @@ COPY rag/       ./rag/
 # Copy pre-built vectorstore + processed data so the container is self-contained.
 # To use a live/updated store instead, mount a volume at runtime:
 #   docker run -v /host/data:/app/data ...
-COPY data/      ./data/
+#COPY data/      ./data/
 
 # HuggingFace Spaces requires port 7860
 EXPOSE 7860
