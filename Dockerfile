@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/       ./app/
 COPY config/    ./config/
 COPY rag/       ./rag/
-COPY evaluation/ ./evaluation/
+#COPY evaluation/ ./evaluation/
 
 # Copy pre-built vectorstore + processed data so the container is self-contained.
 # To use a live/updated store instead, mount a volume at runtime:
