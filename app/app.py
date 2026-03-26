@@ -42,6 +42,10 @@ _state: Dict[str, Any] = {}
 
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
+ASSETS_DIR = STATIC_DIR / "assets"
+ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+
 
 
 # ── Lifespan: initialise heavy components once ────────────────────────────────
@@ -110,7 +114,8 @@ app.add_middleware(
 # Serve static files (HTML / CSS / JS)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-
+if ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
 class QueryRequest(BaseModel):
