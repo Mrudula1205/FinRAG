@@ -1,3 +1,13 @@
+---
+title: FinRAG
+emoji: 📊
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # FinRAG
 
 Production-style retrieval-augmented generation system for SEC 10-K analysis.
