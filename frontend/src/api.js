@@ -1,7 +1,7 @@
 // src/api.js
 import axios from "axios";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = window.location.origin;
 
 export async function health() {
   const res = await axios.get(`${API_BASE}/health`);
