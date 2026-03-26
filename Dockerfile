@@ -40,5 +40,4 @@ COPY --from=frontend-builder /frontend/dist/ ./app/static/
 # HuggingFace Spaces requires port 7860
 EXPOSE 7860
 
-# Pass secrets via Space settings → Variables and secrets → GROQ_API_KEY
 CMD ["uvicorn", "app.app:app", "--host", "0.0.0.0", "--port", "7860"]
