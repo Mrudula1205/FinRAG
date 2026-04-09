@@ -13,7 +13,7 @@ pinned: false
 Production-style retrieval-augmented generation system for SEC 10-K analysis.
 
 FinRAG ingests annual filings, parses them into structured markdown, builds a
-hybrid retrieval index, and serves grounded answers through a FastAPI backend
+hybrid retrieval index and serves grounded answers through a FastAPI backend
 and React frontend. The project is designed to answer filing-specific
 questions with traceable source passages rather than free-form financial
 commentary.
